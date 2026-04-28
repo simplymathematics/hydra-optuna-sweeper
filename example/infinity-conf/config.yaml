@@ -1,0 +1,20 @@
+defaults:
+  - override hydra/sweeper: optuna
+  - override hydra/sweeper/sampler: random
+
+hydra:
+  sweeper:
+    sampler:
+      seed: 123
+    direction: [minimize, maximize]
+    study_name: infinity
+    storage: null
+    n_trials: 4
+    n_jobs: 1
+    max_failure_rate: 0.0
+    params:
+      x: choice(0, 1)
+      y: choice(0, 1)
+
+x: 0
+y: 0
