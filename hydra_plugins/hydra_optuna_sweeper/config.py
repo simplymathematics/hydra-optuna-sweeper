@@ -100,23 +100,6 @@ class NSGAIISamplerConfig(SamplerConfig):
 
 
 @dataclass
-class MOTPESamplerConfig(SamplerConfig):
-    """
-    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.MOTPESampler.html
-    """
-
-    _target_: str = "optuna.samplers.MOTPESampler"
-    seed: Optional[int] = None
-
-    consider_prior: bool = True
-    prior_weight: float = 1.0
-    consider_magic_clip: bool = True
-    consider_endpoints: bool = False
-    n_startup_trials: int = 10
-    n_ehvi_candidates: int = 24
-
-
-@dataclass
 class DistributionConfig:
     # Type of distribution. "int", "float" or "categorical"
     type: DistributionType
@@ -218,13 +201,6 @@ ConfigStore.instance().store(
     group="hydra/sweeper/sampler",
     name="nsgaii",
     node=NSGAIISamplerConfig,
-    provider="optuna_sweeper",
-)
-
-ConfigStore.instance().store(
-    group="hydra/sweeper/sampler",
-    name="motpe",
-    node=MOTPESamplerConfig,
     provider="optuna_sweeper",
 )
 
