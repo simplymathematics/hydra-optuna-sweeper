@@ -355,6 +355,7 @@ class OptunaSweeperImpl(Sweeper):
             returns = self.launcher.launch(overrides, initial_job_idx=self.job_idx)
             self.job_idx += len(returns)
             failures = []
+            failed_rets = []
             for trial, ret in zip(trials, returns):
                 values: Optional[List[float]] = None
                 state: optuna.trial.TrialState = optuna.trial.TrialState.COMPLETE
@@ -408,6 +409,7 @@ class OptunaSweeperImpl(Sweeper):
                     study.tell(trial=trial, state=state, values=values)
                     log.warning(f"Failed experiment: {e}")
                     failures.append(e)
+                    failed_rets.append(ret)
 
             # raise if too many failures
             if len(failures) / len(returns) > self.max_failure_rate:
@@ -416,7 +418,7 @@ class OptunaSweeperImpl(Sweeper):
                     f"with max_failure_rate={self.max_failure_rate}."
                 )
                 assert len(failures) > 0
-                for ret in returns:
+                for ret in failed_rets:
                     ret.return_value  # delegate raising to JobReturn, with actual traceback
 
             n_trials_to_go -= batch_size

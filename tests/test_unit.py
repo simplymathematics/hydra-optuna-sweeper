@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import optuna
 import pytest
 from hydra.core.override_parser.overrides_parser import OverridesParser
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import MISSING, DictConfig, OmegaConf
 from optuna.distributions import (
     BaseDistribution,
     CategoricalDistribution,
@@ -604,7 +604,7 @@ class TestPrunerConfigs:
     def test_patient_pruner_defaults(self) -> None:
         cfg = PatientPrunerConfig()
         assert cfg._target_ == "optuna.pruners.PatientPruner"
-        assert cfg.wrapped_pruner is None
+        assert cfg.wrapped_pruner == MISSING
         assert cfg.patience == 0
         assert cfg.min_delta == 0.0
 
