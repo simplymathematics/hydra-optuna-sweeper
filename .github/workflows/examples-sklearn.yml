@@ -1,4 +1,4 @@
-name: Example Tests
+name: Sklearn Example Tests
 
 on:
   push:
@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  example-tests:
-    name: Example Tests (Python ${{ matrix.python-version }})
+  sklearn-example-tests:
+    name: Sklearn Example Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
 
     strategy:
@@ -32,10 +32,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest scikit-learn
           pip install .
 
-      - name: Run core example tests
+      - name: Run sklearn example tests
         run: |
           pytest tests/test_examples.py -v --tb=short \
-            -k "test_sphere_example or test_multi_objective_example or test_custom_search_space_example or test_infinity_example"
+            -k "test_sklearn_partial_fit_pruning_example or test_sklearn_cv_pruning_example"

@@ -147,6 +147,7 @@ class OptunaSweeperImpl(Sweeper):
     def __init__(
         self,
         sampler: Any,
+        pruner: Any,
         direction: Any,
         storage: Optional[Any],
         study_name: Optional[str],
@@ -158,6 +159,7 @@ class OptunaSweeperImpl(Sweeper):
         params: Optional[DictConfig],
     ) -> None:
         self.sampler = sampler
+        self.pruner = pruner
         self.direction = direction
         self.storage = storage
         self.study_name = study_name
@@ -329,12 +331,14 @@ class OptunaSweeperImpl(Sweeper):
             study_name=self.study_name,
             storage=self.storage,
             sampler=self.sampler,
+            pruner=self.pruner,
             directions=directions,
             load_if_exists=True,
         )
         log.info(f"Study name: {study.study_name}")
         log.info(f"Storage: {self.storage}")
         log.info(f"Sampler: {type(self.sampler).__name__}")
+        log.info(f"Pruner: {type(self.pruner).__name__}")
         log.info(f"Directions: {directions}")
 
         batch_size = self.n_jobs
@@ -351,24 +355,36 @@ class OptunaSweeperImpl(Sweeper):
             returns = self.launcher.launch(overrides, initial_job_idx=self.job_idx)
             self.job_idx += len(returns)
             failures = []
+            failed_rets = []
             for trial, ret in zip(trials, returns):
                 values: Optional[List[float]] = None
                 state: optuna.trial.TrialState = optuna.trial.TrialState.COMPLETE
                 try:
+                    try:
+                        return_value = ret.return_value
+                    except optuna.TrialPruned:
+                        log.info(f"Trial {trial.number} was pruned.")
+                        study.tell(
+                            trial=trial,
+                            state=optuna.trial.TrialState.PRUNED,
+                            values=None,
+                        )
+                        continue
+
                     if len(directions) == 1:
                         try:
-                            values = [float(ret.return_value)]
+                            values = [float(return_value)]
                         except (ValueError, TypeError):
                             raise ValueError(
-                                f"Return value must be float-castable. Got '{ret.return_value}'."
+                                f"Return value must be float-castable. Got '{return_value}'."
                             ).with_traceback(sys.exc_info()[2])
                     else:
                         try:
-                            values = [float(v) for v in ret.return_value]
+                            values = [float(v) for v in return_value]
                         except (ValueError, TypeError):
                             raise ValueError(
                                 "Return value must be a list or tuple of float-castable values."
-                                f" Got '{ret.return_value}'."
+                                f" Got '{return_value}'."
                             ).with_traceback(sys.exc_info()[2])
                         if len(values) != len(directions):
                             raise ValueError(
@@ -393,6 +409,7 @@ class OptunaSweeperImpl(Sweeper):
                     study.tell(trial=trial, state=state, values=values)
                     log.warning(f"Failed experiment: {e}")
                     failures.append(e)
+                    failed_rets.append(ret)
 
             # raise if too many failures
             if len(failures) / len(returns) > self.max_failure_rate:
@@ -401,7 +418,7 @@ class OptunaSweeperImpl(Sweeper):
                     f"with max_failure_rate={self.max_failure_rate}."
                 )
                 assert len(failures) > 0
-                for ret in returns:
+                for ret in failed_rets:
                     ret.return_value  # delegate raising to JobReturn, with actual traceback
 
             n_trials_to_go -= batch_size

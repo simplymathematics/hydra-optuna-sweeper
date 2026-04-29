@@ -5,7 +5,7 @@ from hydra.plugins.sweeper import Sweeper
 from hydra.types import HydraContext, TaskFunction
 from omegaconf import DictConfig
 
-from .config import SamplerConfig
+from .config import PrunerConfig, SamplerConfig
 
 
 class OptunaSweeper(Sweeper):
@@ -14,6 +14,7 @@ class OptunaSweeper(Sweeper):
     def __init__(
         self,
         sampler: SamplerConfig,
+        pruner: PrunerConfig,
         direction: Any,
         storage: Optional[Any],
         study_name: Optional[str],
@@ -28,6 +29,7 @@ class OptunaSweeper(Sweeper):
 
         self.sweeper = OptunaSweeperImpl(
             sampler,
+            pruner,
             direction,
             storage,
             study_name,
