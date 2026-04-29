@@ -1,0 +1,37 @@
+defaults:
+  - override hydra/sweeper: optuna
+  - override hydra/sweeper/sampler: tpe
+  - override hydra/sweeper/pruner: median
+
+hydra:
+  sweeper:
+    sampler:
+      seed: 42
+    # MedianPruner: prune if the trial's intermediate value is worse than the
+    # median of completed trials at the same step.
+    pruner:
+      n_startup_trials: 2
+      n_warmup_steps: 1
+      interval_steps: 1
+    direction: maximize
+    study_name: sklearn-cv-pruning
+    storage: sqlite:///sklearn-cv-pruning.db
+    n_trials: 20
+    n_jobs: 1
+    params:
+      C: interval(1e-3, 10.0)
+      max_iter: choice(50, 100, 200, 500)
+
+# Default hyperparameters (overridden by the sweeper during optimisation)
+C: 1.0
+max_iter: 100
+
+# Cross-validation settings (not swept)
+# The sweep starts with min_folds and adds one fold at a time up to max_folds.
+# If the trial is pruned after fold k, it stops at k folds instead of max_folds.
+min_folds: 2
+max_folds: 8
+n_features: 20
+n_samples: 500
+n_classes: 2
+seed: 0

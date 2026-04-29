@@ -160,8 +160,69 @@ def test_logistic_regression_pruning_example(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# infinity.py
+# sklearn-partial-fit-pruning.py
 # ---------------------------------------------------------------------------
+
+
+def test_sklearn_partial_fit_pruning_example(tmp_path: Path) -> None:
+    """sklearn-partial-fit-pruning.py trains an SGDClassifier with partial_fit and
+    Optuna pruning; the sweep must complete and return a score between 0 and 1."""
+    storage = f"sqlite:///{tmp_path}/study.db"
+    _run(
+        "example/sklearn-partial-fit-pruning.py",
+        "--multirun",
+        "hydra/sweeper=optuna",
+        f"hydra.sweep.dir={tmp_path}",
+        "hydra.job.chdir=False",
+        "hydra.sweeper.n_trials=10",
+        "hydra.sweeper.n_jobs=1",
+        f"hydra.sweeper.storage={storage}",
+        "hydra/sweeper/sampler=random",
+        "hydra.sweeper.sampler.seed=0",
+        "hydra/sweeper/pruner=median",
+        "hydra.sweeper.pruner.n_startup_trials=2",
+        "hydra.sweeper.pruner.n_warmup_steps=3",
+    )
+    returns = OmegaConf.load(tmp_path / "optimization_results.yaml")
+    assert isinstance(returns, DictConfig)
+    assert returns.name == "optuna"
+    assert "best_params" in returns
+    assert "best_value" in returns
+    assert 0.0 <= returns.best_value <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# sklearn-cv-pruning.py
+# ---------------------------------------------------------------------------
+
+
+def test_sklearn_cv_pruning_example(tmp_path: Path) -> None:
+    """sklearn-cv-pruning.py uses progressive cross-validation with Optuna pruning;
+    the sweep must complete and return a score between 0 and 1."""
+    storage = f"sqlite:///{tmp_path}/study.db"
+    _run(
+        "example/sklearn-cv-pruning.py",
+        "--multirun",
+        "hydra/sweeper=optuna",
+        f"hydra.sweep.dir={tmp_path}",
+        "hydra.job.chdir=False",
+        "hydra.sweeper.n_trials=10",
+        "hydra.sweeper.n_jobs=1",
+        f"hydra.sweeper.storage={storage}",
+        "hydra/sweeper/sampler=random",
+        "hydra.sweeper.sampler.seed=0",
+        "hydra/sweeper/pruner=median",
+        "hydra.sweeper.pruner.n_startup_trials=2",
+        "hydra.sweeper.pruner.n_warmup_steps=1",
+    )
+    returns = OmegaConf.load(tmp_path / "optimization_results.yaml")
+    assert isinstance(returns, DictConfig)
+    assert returns.name == "optuna"
+    assert "best_params" in returns
+    assert "best_value" in returns
+    assert 0.0 <= returns.best_value <= 1.0
+
+
 
 
 def test_infinity_example(tmp_path: Path) -> None:
