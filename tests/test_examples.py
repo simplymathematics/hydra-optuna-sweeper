@@ -7,6 +7,7 @@ Each test runs an example script as a subprocess:
 and validates the ``optimization_results.yaml`` written to the sweep directory.
 """
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,12 +20,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _run(*args: str) -> None:
-    """Run ``python <args>`` from the repository root, raising on failure."""
+    """Run ``python <args>`` from the repository root, raising on failure.
+
+    The repo root is prepended to PYTHONPATH so that Hydra's plugin
+    discovery can find the ``hydra_plugins`` namespace package in the
+    subprocess environment.
+    """
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(REPO_ROOT) + (os.pathsep + existing if existing else "")
     result = subprocess.run(
         [sys.executable, *args],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
+        env=env,
     )
     if result.returncode != 0:
         raise AssertionError(
@@ -113,6 +123,36 @@ def test_custom_search_space_example(tmp_path: Path) -> None:
     assert returns.name == "optuna"
     assert "best_params" in returns
     assert "best_value" in returns
+
+
+# ---------------------------------------------------------------------------
+# logistic-regression-pruning.py
+# ---------------------------------------------------------------------------
+
+
+def test_logistic_regression_pruning_example(tmp_path: Path) -> None:
+    """logistic-regression-pruning.py trains a PyTorch logistic regression with
+    pruning enabled; the sweep must complete and return a non-negative best value."""
+    _run(
+        "example/logistic-regression-pruning.py",
+        "--multirun",
+        "hydra/sweeper=optuna",
+        f"hydra.sweep.dir={tmp_path}",
+        "hydra.job.chdir=False",
+        "hydra.sweeper.n_trials=10",
+        "hydra.sweeper.n_jobs=1",
+        "hydra/sweeper/sampler=random",
+        "hydra.sweeper.sampler.seed=0",
+        "hydra/sweeper/pruner=median",
+        "hydra.sweeper.pruner.n_startup_trials=1",
+        "hydra.sweeper.pruner.n_warmup_steps=2",
+    )
+    returns = OmegaConf.load(tmp_path / "optimization_results.yaml")
+    assert isinstance(returns, DictConfig)
+    assert returns.name == "optuna"
+    assert "best_params" in returns
+    assert "best_value" in returns
+    assert returns.best_value >= 0.0
 
 
 # ---------------------------------------------------------------------------

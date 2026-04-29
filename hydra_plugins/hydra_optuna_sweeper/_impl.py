@@ -359,20 +359,28 @@ class OptunaSweeperImpl(Sweeper):
                 values: Optional[List[float]] = None
                 state: optuna.trial.TrialState = optuna.trial.TrialState.COMPLETE
                 try:
+                    try:
+                        return_value = ret.return_value
+                    except optuna.TrialPruned:
+                        state = optuna.trial.TrialState.PRUNED
+                        log.info(f"Trial {trial.number} was pruned.")
+                        study.tell(trial=trial, state=state, values=None)
+                        continue
+
                     if len(directions) == 1:
                         try:
-                            values = [float(ret.return_value)]
+                            values = [float(return_value)]
                         except (ValueError, TypeError):
                             raise ValueError(
-                                f"Return value must be float-castable. Got '{ret.return_value}'."
+                                f"Return value must be float-castable. Got '{return_value}'."
                             ).with_traceback(sys.exc_info()[2])
                     else:
                         try:
-                            values = [float(v) for v in ret.return_value]
+                            values = [float(v) for v in return_value]
                         except (ValueError, TypeError):
                             raise ValueError(
                                 "Return value must be a list or tuple of float-castable values."
-                                f" Got '{ret.return_value}'."
+                                f" Got '{return_value}'."
                             ).with_traceback(sys.exc_info()[2])
                         if len(values) != len(directions):
                             raise ValueError(
