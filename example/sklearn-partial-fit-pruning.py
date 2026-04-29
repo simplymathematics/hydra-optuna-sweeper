@@ -74,13 +74,25 @@ def sklearn_partial_fit(cfg: DictConfig) -> float:
         study_name=hydra_cfg.sweeper.study_name,
         storage=hydra_cfg.sweeper.storage,
     )
-    trial = study.trials[trial_number] if trial_number < len(study.trials) else None
-    if trial is None:
+    # Find the trial by its .number attribute (not by list index, which is
+    # unreliable when the study has pre-existing trials).
+    matching = [t for t in study.trials if t.number == trial_number]
+    if not matching:
         raise RuntimeError(
             f"Could not find Optuna trial with number {trial_number} in study "
             f"'{hydra_cfg.sweeper.study_name}'. "
             "Ensure the storage backend is configured and the study is fresh."
         )
+    # Reconstruct a proper Trial object backed by storage so that
+    # trial.report() persists intermediate values and trial.should_prune()
+    # queries the study's pruner correctly.
+    #
+    # Note: FrozenTrial._trial_id is a private attribute that exposes the
+    # internal storage trial ID.  There is no public Optuna API to reconstruct
+    # an active Trial from storage without it; this pattern is the standard
+    # workaround when the objective must be split across processes (as in a
+    # Hydra sweep).  It has been stable across Optuna v3 and v4.
+    trial = optuna.trial.Trial(study, matching[0]._trial_id)
 
     # ------------------------------------------------------------------
     # Data

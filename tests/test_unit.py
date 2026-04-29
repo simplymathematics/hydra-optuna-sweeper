@@ -644,14 +644,45 @@ class TestPrunerIntegration:
         sweeper = _make_sweeper()
         assert isinstance(sweeper.pruner, optuna.pruners.NopPruner)
 
-    def test_pruner_passed_to_create_study(self) -> None:
-        """Verify that the pruner is passed to optuna.create_study."""
+    def test_pruner_accepted_by_optuna_create_study(self) -> None:
+        """Verify that the stored pruner is accepted by optuna.create_study (API compat)."""
         pruner = optuna.pruners.MedianPruner()
         sweeper = _make_sweeper(pruner=pruner, n_trials=1)
+        # Check that Optuna accepts the pruner stored on the sweeper.
         study = optuna.create_study(pruner=sweeper.pruner)
         assert study.sampler is not None
-        # The pruner is stored internally; verify create_study accepts it
         assert isinstance(pruner, optuna.pruners.MedianPruner)
+
+    def test_pruner_wired_to_create_study(self) -> None:
+        """Verify that OptunaSweeperImpl.sweep passes the pruner to optuna.create_study."""
+        import tempfile
+        import unittest.mock as mock
+        from omegaconf import OmegaConf
+
+        pruner = optuna.pruners.MedianPruner()
+        sweeper = _make_sweeper(pruner=pruner, n_trials=1)
+        with mock.patch("hydra_plugins.hydra_optuna_sweeper._impl.optuna.create_study") as mock_cs:
+            mock_study = mock.MagicMock()
+            mock_study.study_name = "unit-test"
+            mock_study.direction = optuna.study.StudyDirection.MINIMIZE
+            mock_study.directions = [optuna.study.StudyDirection.MINIMIZE]
+            mock_study.ask.return_value = mock.MagicMock(number=0)
+            mock_study.stop = mock.MagicMock()
+            mock_study.best_trial.params = {"lr": 0.01}
+            mock_study.best_trial.value = 0.5
+            mock_cs.return_value = mock_study
+            sweeper.config = OmegaConf.create({"hydra": {"sweep": {"dir": tempfile.mkdtemp()}}})
+            sweeper.launcher = mock.MagicMock()
+            sweeper.hydra_context = mock.MagicMock()
+            sweeper.job_idx = 0
+            ret = mock.MagicMock()
+            ret.return_value = 0.5
+            sweeper.launcher.launch.return_value = [ret]
+            sweeper.sweep([])
+            # Verify create_study was called with the pruner
+            assert mock_cs.called
+            _, kwargs = mock_cs.call_args
+            assert kwargs.get("pruner") is pruner
 
     @pytest.mark.parametrize(
         "pruner_instance",
