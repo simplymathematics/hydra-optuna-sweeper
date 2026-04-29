@@ -134,6 +134,7 @@ def test_custom_search_space_example(tmp_path: Path) -> None:
 def test_logistic_regression_pruning_example(tmp_path: Path) -> None:
     """logistic-regression-pruning.py trains a PyTorch logistic regression with
     pruning enabled; the sweep must complete and return a non-negative best value."""
+    pytest.importorskip("torch")
     _run(
         "example/logistic-regression-pruning.py",
         "--multirun",
