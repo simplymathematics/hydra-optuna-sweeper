@@ -186,7 +186,7 @@ class PatientPrunerConfig(PrunerConfig):
     """
 
     _target_: str = "optuna.pruners.PatientPruner"
-    wrapped_pruner: Optional[Any] = None
+    wrapped_pruner: PrunerConfig = MISSING
     patience: int = 0
     min_delta: float = 0.0
 
