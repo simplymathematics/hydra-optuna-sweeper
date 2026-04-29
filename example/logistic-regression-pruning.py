@@ -109,7 +109,7 @@ def logistic_regression(cfg: DictConfig) -> float:
     X_val, y_val = X[split:], y[split:]
 
     # ------------------------------------------------------------------
-    # Model / optimiser
+    # Model / optimizer
     # ------------------------------------------------------------------
     model = LogisticRegression(cfg.n_features)
     optimizer = torch.optim.SGD(

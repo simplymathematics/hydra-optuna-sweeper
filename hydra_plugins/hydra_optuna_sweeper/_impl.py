@@ -362,9 +362,12 @@ class OptunaSweeperImpl(Sweeper):
                     try:
                         return_value = ret.return_value
                     except optuna.TrialPruned:
-                        state = optuna.trial.TrialState.PRUNED
                         log.info(f"Trial {trial.number} was pruned.")
-                        study.tell(trial=trial, state=state, values=None)
+                        study.tell(
+                            trial=trial,
+                            state=optuna.trial.TrialState.PRUNED,
+                            values=None,
+                        )
                         continue
 
                     if len(directions) == 1:
