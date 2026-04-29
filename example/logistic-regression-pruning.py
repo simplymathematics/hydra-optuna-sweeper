@@ -16,21 +16,14 @@ Optuna API you obtain the ``Trial`` object directly, call
 ``trial.report(intermediate_value, step)`` to log the per-epoch metric, and
 then check ``trial.should_prune()`` to see whether to stop early.
 
-Inside a Hydra task function the ``Trial`` object is not passed in
-directly.  To retain a clean, file-system-free example we therefore
-implement our *own* lightweight early-stopping rule: after a short warmup
-we prune any trial whose running validation loss is worse than the best
-loss seen so far across all epochs (patience == 0).  Raising
-``optuna.TrialPruned`` signals the sweeper to mark the trial as PRUNED.
-
-For full ``trial.report`` / ``trial.should_prune`` integration (needed when
-you want the sweeper's configured pruner to make the pruning decision),
-configure a persistent storage (e.g. ``storage: sqlite:///study.db``) and
-retrieve the trial inside the task function with::
-
-    study = optuna.load_study(study_name=cfg.hydra.sweeper.study_name,
-                              storage=cfg.hydra.sweeper.storage)
-    trial  = study.trials[cfg.optuna_trial_number]   # pass via sweeper params
+Inside a Hydra task function the ``Trial`` object is not passed in directly.
+Instead, the Hydra job ID (``HydraConfig.get().job.id``) corresponds to the
+Optuna trial number.  We use it to reload the trial from the study — which
+requires a persistent storage (configured as
+``hydra.sweeper.storage: sqlite:///logistic-regression-pruning.db`` in the
+config).  This lets us call the real ``trial.report`` / ``trial.should_prune``
+API so that the MedianPruner configured in the sweep actually makes the
+pruning decision.
 
 Usage
 -----
@@ -43,6 +36,7 @@ import optuna
 import torch
 import torch.nn as nn
 import hydra
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 
 
@@ -91,10 +85,37 @@ class LogisticRegression(nn.Module):
 def logistic_regression(cfg: DictConfig) -> float:
     """Train a logistic regression and return final validation loss.
 
-    Raises ``optuna.TrialPruned`` when the trial is not promising so that
-    the sweeper records the trial as PRUNED instead of FAILED.
+    Uses ``HydraConfig.get().job.id`` as the Optuna trial number to reload
+    the trial from persistent storage and invoke ``trial.report`` /
+    ``trial.should_prune`` so the configured MedianPruner can prune
+    unpromising trials.  Raises ``optuna.TrialPruned`` when pruned.
     """
     torch.manual_seed(cfg.seed)
+
+    # ------------------------------------------------------------------
+    # Retrieve the Optuna trial via the Hydra job ID.
+    # HydraConfig.get().job.id is the job index assigned by the sweeper,
+    # which matches the trial number in the Optuna study (for a fresh
+    # study where trial numbers start from 0).
+    # ------------------------------------------------------------------
+    hydra_cfg = HydraConfig.get()
+    try:
+        trial_number = int(hydra_cfg.job.id)
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError(
+            f"Expected hydra.job.id to be an integer; got {hydra_cfg.job.id!r}."
+        ) from exc
+    study = optuna.load_study(
+        study_name=hydra_cfg.sweeper.study_name,
+        storage=hydra_cfg.sweeper.storage,
+    )
+    trial = study.trials[trial_number] if trial_number < len(study.trials) else None
+    if trial is None:
+        raise RuntimeError(
+            f"Could not find Optuna trial with number {trial_number} in study "
+            f"'{hydra_cfg.sweeper.study_name}'. "
+            "Ensure the storage backend is configured and the study is fresh."
+        )
 
     # ------------------------------------------------------------------
     # Data
@@ -120,7 +141,7 @@ def logistic_regression(cfg: DictConfig) -> float:
     criterion = nn.BCEWithLogitsLoss()
 
     # ------------------------------------------------------------------
-    # Training loop with early-stopping-based pruning
+    # Training loop with Optuna pruning
     # ------------------------------------------------------------------
     best_val_loss = float("inf")
 
@@ -137,15 +158,16 @@ def logistic_regression(cfg: DictConfig) -> float:
         with torch.no_grad():
             val_loss: float = criterion(model(X_val), y_val).item()
 
-        # Track best validation loss seen so far.
         if val_loss < best_val_loss:
             best_val_loss = val_loss
 
-        # Prune after a short warmup if the current val loss is strictly
-        # worse than the best seen in any previous epoch.
-        # This mimics the behaviour of ``trial.should_prune()`` without
-        # requiring access to the Optuna Trial object.
-        if epoch >= 2 and val_loss > best_val_loss:
+        # Report the intermediate value to Optuna so the pruner can
+        # evaluate whether this trial is worth continuing.
+        trial.report(val_loss, epoch)
+
+        # Let the configured pruner (e.g. MedianPruner) decide whether
+        # to stop this trial early.
+        if trial.should_prune():
             raise optuna.TrialPruned()
 
     return best_val_loss
@@ -153,3 +175,4 @@ def logistic_regression(cfg: DictConfig) -> float:
 
 if __name__ == "__main__":
     logistic_regression()
+

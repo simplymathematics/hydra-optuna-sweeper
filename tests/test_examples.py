@@ -135,6 +135,7 @@ def test_logistic_regression_pruning_example(tmp_path: Path) -> None:
     """logistic-regression-pruning.py trains a PyTorch logistic regression with
     pruning enabled; the sweep must complete and return a non-negative best value."""
     pytest.importorskip("torch")
+    storage = f"sqlite:///{tmp_path}/study.db"
     _run(
         "example/logistic-regression-pruning.py",
         "--multirun",
@@ -143,6 +144,7 @@ def test_logistic_regression_pruning_example(tmp_path: Path) -> None:
         "hydra.job.chdir=False",
         "hydra.sweeper.n_trials=10",
         "hydra.sweeper.n_jobs=1",
+        f"hydra.sweeper.storage={storage}",
         "hydra/sweeper/sampler=random",
         "hydra.sweeper.sampler.seed=0",
         "hydra/sweeper/pruner=median",

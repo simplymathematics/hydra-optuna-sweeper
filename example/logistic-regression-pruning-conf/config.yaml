@@ -15,7 +15,7 @@ hydra:
       interval_steps: 1
     direction: minimize
     study_name: logistic-regression-pruning
-    storage: null
+    storage: sqlite:///logistic-regression-pruning.db
     n_trials: 20
     n_jobs: 1
     params:
