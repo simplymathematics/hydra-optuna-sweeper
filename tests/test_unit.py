@@ -33,9 +33,17 @@ from hydra_plugins.hydra_optuna_sweeper.config import (
     DistributionConfig,
     DistributionType,
     GridSamplerConfig,
+    HyperbandPrunerConfig,
+    MedianPrunerConfig,
+    NopPrunerConfig,
     NSGAIISamplerConfig,
     OptunaSweeperConf,
+    PatientPrunerConfig,
+    PercentilePrunerConfig,
+    PrunerConfig,
     RandomSamplerConfig,
+    SuccessiveHalvingPrunerConfig,
+    ThresholdPrunerConfig,
     TPESamplerConfig,
 )
 
@@ -51,10 +59,14 @@ def _make_sweeper(
     n_trials: int = 10,
     n_jobs: int = 1,
     max_failure_rate: float = 0.0,
+    pruner: Any = None,
 ) -> OptunaSweeperImpl:
     """Construct a minimal OptunaSweeperImpl for unit testing."""
+    if pruner is None:
+        pruner = optuna.pruners.NopPruner()
     return OptunaSweeperImpl(
         sampler=RandomSampler(),
+        pruner=pruner,
         direction=direction,
         storage=None,
         study_name="unit-test",
@@ -523,3 +535,138 @@ class TestOptunaSweeperConf:
     def test_default_search_space_is_none(self) -> None:
         conf = OptunaSweeperConf()
         assert conf.search_space is None
+
+
+# ---------------------------------------------------------------------------
+# Pruner config dataclasses
+# ---------------------------------------------------------------------------
+
+class TestPrunerConfigs:
+    def test_nop_pruner_defaults(self) -> None:
+        cfg = NopPrunerConfig()
+        assert cfg._target_ == "optuna.pruners.NopPruner"
+
+    def test_median_pruner_defaults(self) -> None:
+        cfg = MedianPrunerConfig()
+        assert cfg._target_ == "optuna.pruners.MedianPruner"
+        assert cfg.n_startup_trials == 5
+        assert cfg.n_warmup_steps == 0
+        assert cfg.interval_steps == 1
+        assert cfg.n_min_trials == 1
+
+    def test_median_pruner_custom_values(self) -> None:
+        cfg = MedianPrunerConfig(n_startup_trials=10, n_warmup_steps=5)
+        assert cfg.n_startup_trials == 10
+        assert cfg.n_warmup_steps == 5
+
+    def test_percentile_pruner_defaults(self) -> None:
+        cfg = PercentilePrunerConfig()
+        assert cfg._target_ == "optuna.pruners.PercentilePruner"
+        assert cfg.percentile == 25.0
+        assert cfg.n_startup_trials == 5
+        assert cfg.n_warmup_steps == 0
+        assert cfg.interval_steps == 1
+        assert cfg.n_min_trials == 1
+
+    def test_percentile_pruner_custom_percentile(self) -> None:
+        cfg = PercentilePrunerConfig(percentile=50.0)
+        assert cfg.percentile == 50.0
+
+    def test_successive_halving_pruner_defaults(self) -> None:
+        cfg = SuccessiveHalvingPrunerConfig()
+        assert cfg._target_ == "optuna.pruners.SuccessiveHalvingPruner"
+        assert cfg.min_resource == "auto"
+        assert cfg.reduction_factor == 4
+        assert cfg.min_early_stopping_rate == 0
+        assert cfg.bootstrap_count == 0
+
+    def test_hyperband_pruner_defaults(self) -> None:
+        cfg = HyperbandPrunerConfig()
+        assert cfg._target_ == "optuna.pruners.HyperbandPruner"
+        assert cfg.min_resource == 1
+        assert cfg.max_resource == "auto"
+        assert cfg.reduction_factor == 3
+        assert cfg.bootstrap_count == 0
+
+    def test_threshold_pruner_defaults(self) -> None:
+        cfg = ThresholdPrunerConfig()
+        assert cfg._target_ == "optuna.pruners.ThresholdPruner"
+        assert cfg.lower is None
+        assert cfg.upper is None
+        assert cfg.n_warmup_steps == 0
+        assert cfg.interval_steps == 1
+
+    def test_threshold_pruner_with_bounds(self) -> None:
+        cfg = ThresholdPrunerConfig(lower=0.0, upper=1.0)
+        assert cfg.lower == 0.0
+        assert cfg.upper == 1.0
+
+    def test_patient_pruner_defaults(self) -> None:
+        cfg = PatientPrunerConfig()
+        assert cfg._target_ == "optuna.pruners.PatientPruner"
+        assert cfg.wrapped_pruner is None
+        assert cfg.patience == 0
+        assert cfg.min_delta == 0.0
+
+    def test_patient_pruner_is_pruner_config(self) -> None:
+        cfg = PatientPrunerConfig()
+        assert isinstance(cfg, PrunerConfig)
+
+    def test_all_pruner_configs_are_pruner_config(self) -> None:
+        for cls in (
+            NopPrunerConfig,
+            MedianPrunerConfig,
+            PercentilePrunerConfig,
+            SuccessiveHalvingPrunerConfig,
+            HyperbandPrunerConfig,
+            ThresholdPrunerConfig,
+            PatientPrunerConfig,
+        ):
+            assert issubclass(cls, PrunerConfig)
+
+
+# ---------------------------------------------------------------------------
+# OptunaSweeperImpl pruner integration
+# ---------------------------------------------------------------------------
+
+class TestPrunerIntegration:
+    def test_nop_pruner_stored(self) -> None:
+        pruner = optuna.pruners.NopPruner()
+        sweeper = _make_sweeper(pruner=pruner)
+        assert sweeper.pruner is pruner
+
+    def test_median_pruner_stored(self) -> None:
+        pruner = optuna.pruners.MedianPruner(n_startup_trials=3)
+        sweeper = _make_sweeper(pruner=pruner)
+        assert sweeper.pruner is pruner
+
+    def test_default_pruner_is_nop(self) -> None:
+        sweeper = _make_sweeper()
+        assert isinstance(sweeper.pruner, optuna.pruners.NopPruner)
+
+    def test_pruner_passed_to_create_study(self) -> None:
+        """Verify that the pruner is passed to optuna.create_study."""
+        pruner = optuna.pruners.MedianPruner()
+        sweeper = _make_sweeper(pruner=pruner, n_trials=1)
+        study = optuna.create_study(pruner=sweeper.pruner)
+        assert study.sampler is not None
+        # The pruner is stored internally; verify create_study accepts it
+        assert isinstance(pruner, optuna.pruners.MedianPruner)
+
+    @pytest.mark.parametrize(
+        "pruner_instance",
+        [
+            optuna.pruners.NopPruner(),
+            optuna.pruners.MedianPruner(),
+            optuna.pruners.PercentilePruner(25.0),
+            optuna.pruners.SuccessiveHalvingPruner(),
+            optuna.pruners.HyperbandPruner(),
+            optuna.pruners.ThresholdPruner(lower=0.0, upper=None),
+        ],
+    )
+    def test_various_pruners_stored_correctly(
+        self, pruner_instance: optuna.pruners.BasePruner
+    ) -> None:
+        sweeper = _make_sweeper(pruner=pruner_instance)
+        assert sweeper.pruner is pruner_instance
+

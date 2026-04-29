@@ -24,6 +24,11 @@ class SamplerConfig:
 
 
 @dataclass
+class PrunerConfig:
+    _target_: str = MISSING
+
+
+@dataclass
 class GridSamplerConfig(SamplerConfig):
     """
     https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.GridSampler.html
@@ -100,6 +105,93 @@ class NSGAIISamplerConfig(SamplerConfig):
 
 
 @dataclass
+class NopPrunerConfig(PrunerConfig):
+    """
+    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.pruners.NopPruner.html
+    """
+
+    _target_: str = "optuna.pruners.NopPruner"
+
+
+@dataclass
+class MedianPrunerConfig(PrunerConfig):
+    """
+    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.pruners.MedianPruner.html
+    """
+
+    _target_: str = "optuna.pruners.MedianPruner"
+    n_startup_trials: int = 5
+    n_warmup_steps: int = 0
+    interval_steps: int = 1
+    n_min_trials: int = 1
+
+
+@dataclass
+class PercentilePrunerConfig(PrunerConfig):
+    """
+    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.pruners.PercentilePruner.html
+    """
+
+    _target_: str = "optuna.pruners.PercentilePruner"
+    percentile: float = 25.0
+    n_startup_trials: int = 5
+    n_warmup_steps: int = 0
+    interval_steps: int = 1
+    n_min_trials: int = 1
+
+
+@dataclass
+class SuccessiveHalvingPrunerConfig(PrunerConfig):
+    """
+    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.pruners.SuccessiveHalvingPruner.html
+    """
+
+    _target_: str = "optuna.pruners.SuccessiveHalvingPruner"
+    min_resource: Any = "auto"
+    reduction_factor: int = 4
+    min_early_stopping_rate: int = 0
+    bootstrap_count: int = 0
+
+
+@dataclass
+class HyperbandPrunerConfig(PrunerConfig):
+    """
+    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.pruners.HyperbandPruner.html
+    """
+
+    _target_: str = "optuna.pruners.HyperbandPruner"
+    min_resource: int = 1
+    max_resource: Any = "auto"
+    reduction_factor: int = 3
+    bootstrap_count: int = 0
+
+
+@dataclass
+class ThresholdPrunerConfig(PrunerConfig):
+    """
+    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.pruners.ThresholdPruner.html
+    """
+
+    _target_: str = "optuna.pruners.ThresholdPruner"
+    lower: Optional[float] = None
+    upper: Optional[float] = None
+    n_warmup_steps: int = 0
+    interval_steps: int = 1
+
+
+@dataclass
+class PatientPrunerConfig(PrunerConfig):
+    """
+    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.pruners.PatientPruner.html
+    """
+
+    _target_: str = "optuna.pruners.PatientPruner"
+    wrapped_pruner: Optional[Any] = None
+    patience: int = 0
+    min_delta: float = 0.0
+
+
+@dataclass
 class DistributionConfig:
     # Type of distribution. "int", "float" or "categorical"
     type: DistributionType
@@ -123,7 +215,7 @@ class DistributionConfig:
     step: Optional[float] = None
 
 
-defaults = [{"sampler": "tpe"}]
+defaults = [{"sampler": "tpe"}, {"pruner": "nop"}]
 
 
 @dataclass
@@ -135,6 +227,11 @@ class OptunaSweeperConf:
     # Please refer to the reference for further details
     # https://optuna.readthedocs.io/en/stable/reference/samplers.html
     sampler: SamplerConfig = MISSING
+
+    # Pruning algorithm
+    # Please refer to the reference for further details
+    # https://optuna.readthedocs.io/en/stable/reference/pruners.html
+    pruner: PrunerConfig = MISSING
 
     # Direction of optimization
     # Union[Direction, List[Direction]]
@@ -208,5 +305,54 @@ ConfigStore.instance().store(
     group="hydra/sweeper/sampler",
     name="grid",
     node=GridSamplerConfig,
+    provider="optuna_sweeper",
+)
+
+ConfigStore.instance().store(
+    group="hydra/sweeper/pruner",
+    name="nop",
+    node=NopPrunerConfig,
+    provider="optuna_sweeper",
+)
+
+ConfigStore.instance().store(
+    group="hydra/sweeper/pruner",
+    name="median",
+    node=MedianPrunerConfig,
+    provider="optuna_sweeper",
+)
+
+ConfigStore.instance().store(
+    group="hydra/sweeper/pruner",
+    name="percentile",
+    node=PercentilePrunerConfig,
+    provider="optuna_sweeper",
+)
+
+ConfigStore.instance().store(
+    group="hydra/sweeper/pruner",
+    name="successive_halving",
+    node=SuccessiveHalvingPrunerConfig,
+    provider="optuna_sweeper",
+)
+
+ConfigStore.instance().store(
+    group="hydra/sweeper/pruner",
+    name="hyperband",
+    node=HyperbandPrunerConfig,
+    provider="optuna_sweeper",
+)
+
+ConfigStore.instance().store(
+    group="hydra/sweeper/pruner",
+    name="threshold",
+    node=ThresholdPrunerConfig,
+    provider="optuna_sweeper",
+)
+
+ConfigStore.instance().store(
+    group="hydra/sweeper/pruner",
+    name="patient",
+    node=PatientPrunerConfig,
     provider="optuna_sweeper",
 )

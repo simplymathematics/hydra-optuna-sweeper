@@ -147,6 +147,7 @@ class OptunaSweeperImpl(Sweeper):
     def __init__(
         self,
         sampler: Any,
+        pruner: Any,
         direction: Any,
         storage: Optional[Any],
         study_name: Optional[str],
@@ -158,6 +159,7 @@ class OptunaSweeperImpl(Sweeper):
         params: Optional[DictConfig],
     ) -> None:
         self.sampler = sampler
+        self.pruner = pruner
         self.direction = direction
         self.storage = storage
         self.study_name = study_name
@@ -329,12 +331,14 @@ class OptunaSweeperImpl(Sweeper):
             study_name=self.study_name,
             storage=self.storage,
             sampler=self.sampler,
+            pruner=self.pruner,
             directions=directions,
             load_if_exists=True,
         )
         log.info(f"Study name: {study.study_name}")
         log.info(f"Storage: {self.storage}")
         log.info(f"Sampler: {type(self.sampler).__name__}")
+        log.info(f"Pruner: {type(self.pruner).__name__}")
         log.info(f"Directions: {directions}")
 
         batch_size = self.n_jobs

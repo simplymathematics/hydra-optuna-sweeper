@@ -325,6 +325,7 @@ def test_warnings(
     partial_sweeper = partial(
         OptunaSweeperImpl,
         sampler=RandomSampler(),
+        pruner=optuna.pruners.NopPruner(),
         direction=Direction.minimize,
         storage=None,
         study_name="test",
