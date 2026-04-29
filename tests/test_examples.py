@@ -12,6 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from omegaconf import DictConfig, OmegaConf
 
 # Repository root — all example scripts are run from here so that their
@@ -186,3 +187,30 @@ def test_infinity_example(tmp_path: Path) -> None:
         v0, v1 = solution["values"]
         assert math.isinf(v0) and v0 < 0, f"Expected -inf, got {v0}"
         assert math.isinf(v1) and v1 > 0, f"Expected +inf, got {v1}"
+
+
+# ---------------------------------------------------------------------------
+# torch-example.py
+# ---------------------------------------------------------------------------
+
+
+def test_torch_example(tmp_path: Path) -> None:
+    """torch-example.py minimises x²+y² using torch tensors; best value must be non-negative."""
+    pytest.importorskip("torch")
+    _run(
+        "example/torch-example.py",
+        "--multirun",
+        "hydra/sweeper=optuna",
+        f"hydra.sweep.dir={tmp_path}",
+        "hydra.job.chdir=False",
+        "hydra.sweeper.n_trials=10",
+        "hydra.sweeper.n_jobs=1",
+        "hydra/sweeper/sampler=random",
+        "hydra.sweeper.sampler.seed=0",
+    )
+    returns = OmegaConf.load(tmp_path / "optimization_results.yaml")
+    assert isinstance(returns, DictConfig)
+    assert returns.name == "optuna"
+    assert "best_params" in returns
+    assert "best_value" in returns
+    assert returns.best_value >= 0.0
